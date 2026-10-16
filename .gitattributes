@@ -1,0 +1,7 @@
+# Scripts e configs correm em Linux: forcar finais de linha LF mesmo se commitados no Windows
+*.sh  text eol=lf
+*.py  text eol=lf
+*.cfg text eol=lf
+*.md  text eol=lf
+*.example text eol=lf
+VERSION text eol=lf
