@@ -10,14 +10,14 @@
 #
 # moonraker.conf (every option is optional, these are the defaults):
 #   [network_info]
-#   title: Endereços IP da máquina
+#   title: IP addresses of this machine
 #   label_wifi: Wi-Fi
-#   label_wired: Cabo
+#   label_wired: Cable
 #   label_usb: USB
-#   text_no_link: sem ligação
-#   text_connecting: a obter endereço
-#   text_no_interfaces: nenhuma placa de rede encontrada
-#   text_error: não foi possível ler a rede
+#   text_no_link: not connected
+#   text_connecting: getting an address
+#   text_no_interfaces: no network interface found
+#   text_error: could not read the network
 from __future__ import annotations
 
 import asyncio
@@ -137,22 +137,22 @@ def build_lines(
 class NetworkInfo:
     def __init__(self, config: ConfigHelper) -> None:
         self.server = config.get_server()
-        self.title = _clean(config.get("title", "Endereços IP da máquina"))
+        self.title = _clean(config.get("title", "IP addresses of this machine"))
         self.labels = {
             KIND_WIFI: _clean(config.get("label_wifi", "Wi-Fi")),
-            KIND_WIRED: _clean(config.get("label_wired", "Cabo")),
+            KIND_WIRED: _clean(config.get("label_wired", "Cable")),
             KIND_USB: _clean(config.get("label_usb", "USB")),
         }
         self.texts = {
-            "no_link": _clean(config.get("text_no_link", "sem ligação")),
+            "no_link": _clean(config.get("text_no_link", "not connected")),
             "connecting": _clean(
-                config.get("text_connecting", "a obter endereço")
+                config.get("text_connecting", "getting an address")
             ),
             "no_interfaces": _clean(config.get(
-                "text_no_interfaces", "nenhuma placa de rede encontrada"
+                "text_no_interfaces", "no network interface found"
             )),
             "error": _clean(
-                config.get("text_error", "não foi possível ler a rede")
+                config.get("text_error", "could not read the network")
             ),
         }
         self._log_version()

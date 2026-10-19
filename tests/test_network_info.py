@@ -17,8 +17,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 import network_info  # noqa: E402
 
-LABELS = {"wifi": "Wi-Fi", "wired": "Cabo", "usb": "USB"}
-TEXTS = {"no_link": "sem ligação", "connecting": "a obter endereço"}
+LABELS = {"wifi": "Wi-Fi", "wired": "Cable", "usb": "USB"}
+TEXTS = {"no_link": "not connected", "connecting": "getting an address"}
 
 # Shape of `ip -j address` on the M-BIND (trimmed to the fields we read)
 IP_OUTPUT = json.dumps([
@@ -205,7 +205,7 @@ class BuildLinesTests(unittest.TestCase):
     def test_real_machine_example(self):
         self.assertEqual(self.lines(), [
             "Wi-Fi (wlan0): 192.168.0.177",
-            "Cabo (eth0): sem ligação",
+            "Cable (eth0): not connected",
             "USB (eth1): 192.168.0.178",
         ])
 
@@ -220,7 +220,7 @@ class BuildLinesTests(unittest.TestCase):
         for i in data:
             if i["ifname"] == "eth1":
                 i["addr_info"] = []
-        self.assertIn("USB (eth1): a obter endereço",
+        self.assertIn("USB (eth1): getting an address",
                       self.lines(json.dumps(data)))
 
 
@@ -238,7 +238,7 @@ class ComponentTests(unittest.TestCase):
             run(comp._on_show_request())
         self.assertEqual(len(apis.gcodes), 1)
         self.assertEqual(apis.gcodes[0].split("\n"), [
-            'RESPOND MSG="Endereços IP da máquina:"',
+            'RESPOND MSG="IP addresses of this machine:"',
             'RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"',
         ])
 
@@ -247,7 +247,7 @@ class ComponentTests(unittest.TestCase):
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value={})):
             run(comp._on_show_request())
-        self.assertIn("nenhuma placa de rede encontrada", apis.gcodes[0])
+        self.assertIn("no network interface found", apis.gcodes[0])
 
     def test_read_error_is_reported_as_error(self):
         comp, _, apis = make_component()
@@ -255,8 +255,8 @@ class ComponentTests(unittest.TestCase):
         with mock.patch.object(comp, "_read_interfaces", boom):
             run(comp._on_show_request())
         self.assertEqual(apis.gcodes, [
-            'RESPOND TYPE=error MSG="Endereços IP da máquina: '
-            'não foi possível ler a rede"'])
+            'RESPOND TYPE=error MSG="IP addresses of this machine: '
+            'could not read the network"'])
 
     def test_unexpected_error_does_not_escape(self):
         comp, _, apis = make_component()

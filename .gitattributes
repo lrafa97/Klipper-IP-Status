@@ -1,4 +1,4 @@
-# Scripts e configs correm em Linux: forcar finais de linha LF mesmo se commitados no Windows
+# Scripts and configs run on Linux: force LF line endings even when committed from Windows
 *.sh  text eol=lf
 *.py  text eol=lf
 *.cfg text eol=lf

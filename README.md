@@ -8,9 +8,9 @@ also shows in Fluidd and KlipperScreen.
 Type `SHOW_IP_ADDRESS` in the console:
 
 ```
-Endereços IP da máquina:
+IP addresses of this machine:
 Wi-Fi (wlan0): 192.168.0.177
-Cabo (eth0): sem ligação
+Cable (eth0): not connected
 USB (eth1): 192.168.0.178
 ```
 
@@ -19,8 +19,7 @@ USB (eth1): 192.168.0.178
   soon as the network is up, and the line is not there when nothing is plugged in.
 - Read fresh on every call, so what you see is what the machine has right now.
 - Read-only: nothing on the machine is changed by running it.
-- The text is in Portuguese by default and every word can be changed (see
-  [Configuration](#configuration)).
+- All the texts can be changed (see [Configuration](#configuration)).
 
 ## Requirements
 
@@ -74,34 +73,27 @@ Klipper needs a restart.
 
 ## Configuration
 
-Everything has a default. To change something, edit the `[network_info]`
-section that the installer added to `moonraker.conf`, then restart Moonraker.
+Everything has a default, so there is nothing to configure. To change a text,
+add the option under the `[network_info]` section that the installer put in
+`moonraker.conf`, then restart Moonraker (`sudo systemctl restart moonraker`).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `title` | `Endereços IP da máquina` | first line of the output |
+| `title` | `IP addresses of this machine` | first line of the output |
 | `label_wifi` | `Wi-Fi` | name shown for Wi-Fi interfaces |
-| `label_wired` | `Cabo` | name shown for the built-in Ethernet |
+| `label_wired` | `Cable` | name shown for the built-in Ethernet |
 | `label_usb` | `USB` | name shown for USB network adapters and tethering |
-| `text_no_link` | `sem ligação` | interface present but not connected |
-| `text_connecting` | `a obter endereço` | connected, address not received yet |
-| `text_no_interfaces` | `nenhuma placa de rede encontrada` | no physical interface at all |
-| `text_error` | `não foi possível ler a rede` | the `ip` command failed |
-
-English, for example:
-
-```
-[network_info]
-title: IP addresses of the machine
-label_wired: Cable
-text_no_link: not connected
-text_connecting: getting an address
-text_no_interfaces: no network interface found
-text_error: could not read the network
-```
+| `text_no_link` | `not connected` | interface present but not connected |
+| `text_connecting` | `getting an address` | connected, address not received yet |
+| `text_no_interfaces` | `no network interface found` | no physical interface at all |
+| `text_error` | `could not read the network` | the `ip` command failed |
 
 Quotes, braces and semicolons are removed from these texts, because they would
 break the console message.
+
+That section lives inside the block marked by the installer, and running
+`install.sh` again rewrites the block. If you changed options, set them again
+afterwards.
 
 ## How it works
 
