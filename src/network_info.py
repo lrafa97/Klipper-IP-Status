@@ -23,6 +23,8 @@
 #   text_then: then
 #   text_or: or
 #   label_vpn: VPN
+#   label_hostname: Hostname
+#   show_hostname: True    (shows the machine name and its .local name)
 #   show_vpn: False        (True lists VPN tunnels such as Tailscale)
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ import logging
 import os
 import pathlib
 import re
+import socket
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -40,6 +43,7 @@ if TYPE_CHECKING:
 SYSFS_NET = pathlib.Path("/sys/class/net")
 IP_ADDRESS_COMMAND = ("ip", "-j", "address")
 IP_ROUTE_COMMAND = ("ip", "-j", "route", "show", "default")
+AVAHI_PID = pathlib.Path("/run/avahi-daemon/pid")   # exists while mDNS runs
 IP_TIMEOUT = 5.0            # seconds before giving up on an `ip` command
 ARPHRD_ETHER = "1"          # /sys/class/net/<if>/type of Ethernet and Wi-Fi
 ARPHRD_NONE = "65534"       # type of tunnels: Tailscale, WireGuard, OpenVPN tun
@@ -173,6 +177,16 @@ def parse_default_routes(raw: str) -> Dict[str, int]:
     return routes
 
 
+def build_hostname_line(label: str, hostname: str, mdns: bool) -> str:
+    """For example "Hostname: JNTONE (JNTONE.local)".
+
+    The .local name is only shown when mDNS (avahi) is running, because
+    otherwise the name would not work from another computer.
+    """
+    name = hostname.split(".")[0]
+    return f"{label}: {name} ({name}.local)" if mdns else f"{label}: {name}"
+
+
 def build_lines(
     interfaces: Dict[str, dict],
     labels: Dict[str, str],
@@ -241,6 +255,8 @@ class NetworkInfo:
             KIND_USB: _clean(config.get("label_usb", "USB")),
             KIND_VPN: _clean(config.get("label_vpn", "VPN")),
         }
+        self.label_hostname = _clean(config.get("label_hostname", "Hostname"))
+        self.show_hostname = config.getboolean("show_hostname", True)
         self.show_vpn = config.getboolean("show_vpn", False)
         self.texts = {
             "no_link": _clean(config.get("text_no_link", "not connected")),
@@ -320,6 +336,19 @@ class NetworkInfo:
             logging.exception("network_info: unexpected error reading routes")
         return None
 
+    def _hostname_line(self) -> Optional[str]:
+        # An extra: any failure just leaves the line out
+        try:
+            name = _clean(socket.gethostname())
+            if not name:
+                return None
+            return build_hostname_line(
+                self.label_hostname, name, AVAHI_PID.exists()
+            )
+        except OSError as e:
+            logging.info(f"network_info: no hostname: {e}")
+            return None
+
     # ----------------------------------------------------------- handler
     async def _on_show_request(self) -> None:
         try:
@@ -329,6 +358,10 @@ class NetworkInfo:
             lines = build_lines(
                 interfaces, self.labels, self.texts, show_vpn=self.show_vpn
             )
+            if lines and self.show_hostname:
+                host = self._hostname_line()
+                if host:
+                    lines.insert(0, host)
             if lines and routes is not None:
                 lines.append(
                     build_internet_line(routes, self.labels, self.texts)

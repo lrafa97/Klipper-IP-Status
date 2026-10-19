@@ -9,6 +9,7 @@ Type `SHOW_IP_ADDRESS` in the console:
 
 ```
 IP addresses of this machine:
+Hostname: JNTONE (JNTONE.local)
 Wi-Fi (wlan0): 192.168.0.177
 Cable (eth0): not connected
 USB (eth1): 192.168.0.178
@@ -21,6 +22,10 @@ Internet: USB (eth1), then Wi-Fi (wlan0)
   connection works: a hotspot without data is still listed first. Interfaces
   with the same metric are joined with `or`, because the system does not
   guarantee which one it picks.
+- The `Hostname:` line shows the machine name and, when mDNS (avahi) is
+  running, its `.local` name, which you can type in a browser instead of the IP.
+  It is only an extra line: the IP lines are always shown. Turn it off with
+  `show_hostname: False`.
 - Optional VPN line (`show_vpn: True`), for example `VPN (tailscale0): 100.64.0.9`.
   Off by default. It is only an extra line: the IP lines are always shown.
 - Works with a phone or router plugged in by USB (tethering): it appears as
@@ -99,6 +104,8 @@ add the option under the `[network_info]` section that the installer put in
 | `text_no_route` | `no route` | no default route on a physical interface |
 | `text_then` | `then` | between connections of different priority |
 | `text_or` | `or` | between connections of the same priority |
+| `label_hostname` | `Hostname` | name of the hostname line |
+| `show_hostname` | `True` | `False` hides the hostname line |
 | `label_vpn` | `VPN` | name shown for tunnels such as Tailscale or WireGuard |
 | `show_vpn` | `False` | `True` adds a line per VPN tunnel, after the others |
 

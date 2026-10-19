@@ -271,6 +271,61 @@ class VpnTests(unittest.TestCase):
         self.assertTrue(make_component(show_vpn=True)[0].show_vpn)
 
 
+class HostnameTests(unittest.TestCase):
+    def test_with_mdns(self):
+        self.assertEqual(
+            network_info.build_hostname_line("Hostname", "JNTONE", True),
+            "Hostname: JNTONE (JNTONE.local)")
+
+    def test_without_mdns_no_local_name(self):
+        self.assertEqual(
+            network_info.build_hostname_line("Hostname", "JNTONE", False),
+            "Hostname: JNTONE")
+
+    def test_domain_part_is_dropped(self):
+        self.assertEqual(
+            network_info.build_hostname_line("Hostname", "pi.lan", True),
+            "Hostname: pi (pi.local)")
+
+    def run_show(self, avahi_exists, **opts):
+        comp, _, apis = make_component(**opts)
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        fake_pid = mock.Mock()
+        fake_pid.exists.return_value = avahi_exists
+        with mock.patch.object(comp, "_read_interfaces",
+                               mock.AsyncMock(return_value=ifaces)), \
+             mock.patch.object(network_info, "classify", return_value="wifi"), \
+             mock.patch.object(network_info, "AVAHI_PID", fake_pid), \
+             mock.patch("socket.gethostname", return_value="JNTONE"):
+            run(comp._on_show_request())
+        return apis.gcodes[0].split("\n")
+
+    def test_line_comes_after_title_and_ips_stay(self):
+        out = self.run_show(True)
+        self.assertEqual(out[1], 'RESPOND MSG="Hostname: JNTONE (JNTONE.local)"')
+        self.assertIn('RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"', out)
+
+    def test_without_avahi(self):
+        self.assertEqual(self.run_show(False)[1],
+                         'RESPOND MSG="Hostname: JNTONE"')
+
+    def test_can_be_turned_off_and_ips_stay(self):
+        out = self.run_show(True, show_hostname=False)
+        self.assertFalse(any("Hostname" in x for x in out))
+        self.assertIn('RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"', out)
+
+    def test_hostname_error_only_drops_the_line(self):
+        comp, _, apis = make_component()
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        with mock.patch.object(comp, "_read_interfaces",
+                               mock.AsyncMock(return_value=ifaces)), \
+             mock.patch.object(network_info, "classify", return_value="wifi"), \
+             mock.patch("socket.gethostname", side_effect=OSError("x")):
+            run(comp._on_show_request())
+        self.assertNotIn("Hostname", apis.gcodes[0])
+        self.assertIn("192.168.0.177", apis.gcodes[0])
+
+
 class InternetLineTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -365,7 +420,7 @@ class ComponentTests(unittest.TestCase):
         self.assertIn("network_info_show", server.methods)
 
     def test_show_sends_one_script_with_title_and_lines(self):
-        comp, _, apis = make_component()
+        comp, _, apis = make_component(show_hostname=False)
         ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value=ifaces)), \
