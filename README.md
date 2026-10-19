@@ -117,8 +117,12 @@ section you wrote outside the block is never touched.
    `action_call_remote_method`, to run the `network_info` component. A macro
    cannot read the network by itself.
 2. The component runs `ip -j address` and decides what each interface is from
-   `/sys/class/net`, not from its name: a wireless interface is Wi-Fi, a device
-   under a USB bus is USB, any other physical interface is the cable. Loopback,
+   `/sys/class/net`, not from its name: a wireless interface is Wi-Fi, a USB
+   network card whose driver is a tethering one (`cdc_ether`, `rndis_host`,
+   `cdc_ncm`, `cdc_eem`, `ipheth`, `huawei_cdc_ncm`) is USB, any other physical
+   interface is the cable. So the Ethernet port of a Raspberry Pi 3 (a chip on
+   the internal USB bus) and a USB-to-RJ45 adapter show as Cable, and a phone or
+   pocket router in tethering mode shows as USB. Loopback,
    VPNs such as Tailscale, bridges and containers have no physical device and
    are not listed.
 3. It also runs `ip -j route show default` and lists the interfaces with a

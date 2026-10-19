@@ -44,6 +44,13 @@ IP_TIMEOUT = 5.0            # seconds before giving up on an `ip` command
 ARPHRD_ETHER = "1"          # /sys/class/net/<if>/type of Ethernet and Wi-Fi
 ARPHRD_NONE = "65534"       # type of tunnels: Tailscale, WireGuard, OpenVPN tun
 USB_PATH = re.compile(r"/usb\d+/")   # path component of a USB bus in sysfs
+# Drivers of USB tethering (phone / pocket router as a network card). Any other
+# Ethernet driver is a cable, even when the chip hangs off the USB bus (the
+# Ethernet port of a Raspberry Pi 3 and a USB-to-RJ45 adapter are both USB).
+TETHER_DRIVERS = frozenset({
+    "cdc_ether", "rndis_host", "cdc_ncm", "cdc_eem", "ipheth",
+    "huawei_cdc_ncm",
+})
 
 # Order in which the kinds are listed in the console
 KIND_WIFI, KIND_WIRED, KIND_USB, KIND_VPN = "wifi", "wired", "usb", "vpn"
@@ -68,6 +75,8 @@ def classify(ifname: str, sysfs: pathlib.Path = SYSFS_NET) -> Optional[str]:
 
     Decided from sysfs and not from the interface name, so it keeps working
     when the system names interfaces differently (eth1, enx..., usb0, end0).
+    Wi-Fi is a wireless interface. USB means tethering, recognised by its
+    driver (see TETHER_DRIVERS); every other Ethernet interface is Cable.
     Virtual interfaces (loopback, VPN, bridges, containers, CAN) return None.
     """
     base = sysfs / ifname
@@ -79,9 +88,14 @@ def classify(ifname: str, sysfs: pathlib.Path = SYSFS_NET) -> Optional[str]:
             return None
         if (base / "wireless").exists():
             return KIND_WIFI
-        # A USB network adapter lives under a .../usbN/... device path
         if USB_PATH.search(os.path.realpath(base)):
-            return KIND_USB
+            # On USB, the driver tells tethering (USB) from a wired adapter
+            # (Cable). If the driver cannot be read, keep the safe answer: USB.
+            driver = base / "device" / "driver"
+            if not driver.exists():
+                return KIND_USB
+            name = os.path.basename(os.path.realpath(driver))
+            return KIND_USB if name in TETHER_DRIVERS else KIND_WIRED
         return KIND_WIRED
     except OSError:
         return None

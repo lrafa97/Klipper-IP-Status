@@ -51,7 +51,7 @@ IP_OUTPUT = json.dumps([
 ])
 
 
-def make_iface(sysfs, name, devpath, type_="1", wireless=False):
+def make_iface(sysfs, name, devpath, type_="1", wireless=False, driver=None):
     """Build /sys/class/net/<name> -> /sys/devices/<devpath>/net/<name>."""
     real = sysfs / "devices" / devpath / "net" / name
     real.mkdir(parents=True)
@@ -59,6 +59,10 @@ def make_iface(sysfs, name, devpath, type_="1", wireless=False):
     if wireless:
         (real / "wireless").mkdir()
     (real / "device").symlink_to(real.parent.parent)
+    if driver:
+        drv = sysfs / "drivers" / driver
+        drv.mkdir(parents=True, exist_ok=True)
+        (real.parent.parent / "driver").symlink_to(drv)
     net = sysfs / "class" / "net"
     net.mkdir(parents=True, exist_ok=True)
     (net / name).symlink_to(real)
@@ -76,7 +80,8 @@ def build_sysfs(root):
     make_virtual(root, "docker0", "1")   # Ethernet-like but virtual
     make_iface(root, "wlan0", "platform/soc/mmc0/mmc0:0001", wireless=True)
     make_iface(root, "eth0", "platform/axi/pcie/ethernet")
-    make_iface(root, "eth1", "platform/axi/xhci/usb1/1-1/1-1.1/1-1.1.1:1.0")
+    make_iface(root, "eth1", "platform/axi/xhci/usb1/1-1/1-1.1/1-1.1.1:1.0",
+               driver="cdc_ether")
     return root / "class" / "net"
 
 
@@ -168,6 +173,26 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(c("wlan0"), "wifi")
         self.assertEqual(c("eth0"), "wired")
         self.assertEqual(c("eth1"), "usb")
+
+    def test_usb_ethernet_chip_is_cable(self):
+        # Raspberry Pi 3: the Ethernet port is a smsc95xx chip on the USB bus
+        root = pathlib.Path(self.tmp.name)
+        make_iface(root, "eth5", "platform/soc/3f980000.usb/usb1/1-1/1-1.1/1-1.1:1.0",
+                   driver="smsc95xx")
+        self.assertEqual(network_info.classify("eth5", self.net), "wired")
+
+    def test_every_tether_driver_is_usb(self):
+        root = pathlib.Path(self.tmp.name)
+        for i, drv in enumerate(sorted(network_info.TETHER_DRIVERS)):
+            name = f"enx{i}"
+            make_iface(root, name, f"platform/soc/usb1/1-{i}/1-{i}:1.0",
+                       driver=drv)
+            self.assertEqual(network_info.classify(name, self.net), "usb", drv)
+
+    def test_usb_with_unreadable_driver_stays_usb(self):
+        root = pathlib.Path(self.tmp.name)
+        make_iface(root, "eth6", "platform/soc/usb1/1-9/1-9:1.0")
+        self.assertEqual(network_info.classify("eth6", self.net), "usb")
 
     def test_virtual_interfaces_are_ignored(self):
         for name in ("lo", "tailscale0", "docker0", "does-not-exist"):
