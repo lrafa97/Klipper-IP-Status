@@ -105,9 +105,11 @@ add the option under the `[network_info]` section that the installer put in
 Quotes, braces and semicolons are removed from these texts, because they would
 break the console message.
 
-That section lives inside the block marked by the installer, and running
-`install.sh` again rewrites the block. If you changed options, set them again
-afterwards.
+That section lives inside the block marked by the installer. Running
+`install.sh` again rewrites the block but keeps the options you set in it. A new
+install writes `show_vpn: False` there, so it is easy to find; an older install
+gets that line added the next time the installer runs. A `[network_info]`
+section you wrote outside the block is never touched.
 
 ## How it works
 

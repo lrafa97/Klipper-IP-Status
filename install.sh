@@ -60,9 +60,20 @@ ln -sfn "$SRC_REAL/src/network_info.py" "$COMPONENT_LINK"
 
 echo "==> moonraker.conf"
 backup "$CONF"
+# Options the user set inside our block survive a re-run of the installer
+KEPT="$(sed -n "/$BEGIN/,/$END/p" "$CONF" | awk -v end="$END" '
+  $0 == end { on = 0 }
+  /^\[network_info\][[:space:]]*$/ { on = 1; next }
+  /^\[/ { on = 0 }
+  on && NF { print }')"
 remove_conf_block
 BODY=""
-[[ $HAVE_SECTION -eq 1 ]] || BODY+=$'[network_info]\n'
+if [[ $HAVE_SECTION -eq 0 ]]; then
+  BODY+=$'[network_info]\n'
+  [[ -z "$KEPT" ]] || BODY+="$KEPT"$'\n'
+  # Written out so it is easy to find and change; False = no VPN line
+  grep -qE '^show_vpn[[:space:]]*[:=]' <<<"$KEPT" || BODY+=$'show_vpn: False\n'
+fi
 # Updates from Mainsail, if this came from a git clone with an origin
 if ORIGIN="$(git -C "$SRC" remote get-url origin 2>/dev/null)"; then
   # symbolic-ref prints nothing when detached/unavailable (rev-parse prints "HEAD")

@@ -191,6 +191,27 @@ check "their option is still there" has "label_usb: Hotspot" "$(CONF)"
 run uninstall.sh
 check "uninstall gives their moonraker.conf back" same "$(CONF)" "$M/moonraker.orig"
 
+new_machine keepopts
+run install.sh; rc=$?
+check "fresh install writes show_vpn: False" has "show_vpn: False" "$(CONF)"
+sed -i 's/^show_vpn: False$/show_vpn: True/' "$(CONF)"
+sed -i 's/^show_vpn: True$/show_vpn: True\nlabel_usb: Hotspot/' "$(CONF)"
+run install.sh; rc=$?
+check "re-run exits 0" test "$rc" -eq 0
+check "re-run keeps show_vpn: True" has "show_vpn: True" "$(CONF)"
+check "re-run keeps their other option" has "label_usb: Hotspot" "$(CONF)"
+check "re-run does not add show_vpn: False" test "$(count '^show_vpn' "$(CONF)")" -eq 1
+check "re-run keeps one [network_info]" test "$(count '^\[network_info\]' "$(CONF)")" -eq 1
+check "re-run keeps one block" test "$(count '>>> klipper-ip-status' "$(CONF)")" -eq 1
+run install.sh
+check "third run does not duplicate options" test "$(count '^label_usb' "$(CONF)")" -eq 1
+
+new_machine oldblock
+printf '\n# >>> klipper-ip-status >>>\n[network_info]\nlabel_wifi: Casa\n# <<< klipper-ip-status <<<\n' >>"$M/pd/config/moonraker.conf"
+run install.sh; rc=$?
+check "block from v0.2 (no show_vpn): option kept" has "label_wifi: Casa" "$(CONF)"
+check "  ...and show_vpn: False is added" has "show_vpn: False" "$(CONF)"
+
 new_machine otherinclude
 printf '[include network/network_info.cfg]\n' >"$M/pd/config/extra.cfg"
 run install.sh; rc=$?
