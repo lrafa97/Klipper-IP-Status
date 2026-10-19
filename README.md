@@ -12,9 +12,17 @@ IP addresses of this machine:
 Wi-Fi (wlan0): 192.168.0.177
 Cable (eth0): not connected
 USB (eth1): 192.168.0.178
+Internet: USB (eth1), then Wi-Fi (wlan0)
 ```
 
 - One line per **physical** network interface: Wi-Fi, then cable, then USB.
+- The `Internet:` line shows which connection the system prefers, in order. It
+  is the **configured** order (lowest route metric first), not a test that the
+  connection works: a hotspot without data is still listed first. Interfaces
+  with the same metric are joined with `or`, because the system does not
+  guarantee which one it picks.
+- Optional VPN line (`show_vpn: True`), for example `VPN (tailscale0): 100.64.0.9`.
+  Off by default. It is only an extra line: the IP lines are always shown.
 - Works with a phone or router plugged in by USB (tethering): it appears as
   soon as the network is up, and the line is not there when nothing is plugged in.
 - Read fresh on every call, so what you see is what the machine has right now.
@@ -87,6 +95,12 @@ add the option under the `[network_info]` section that the installer put in
 | `text_connecting` | `getting an address` | connected, address not received yet |
 | `text_no_interfaces` | `no network interface found` | no physical interface at all |
 | `text_error` | `could not read the network` | the `ip` command failed |
+| `label_internet` | `Internet` | start of the route-order line |
+| `text_no_route` | `no route` | no default route on a physical interface |
+| `text_then` | `then` | between connections of different priority |
+| `text_or` | `or` | between connections of the same priority |
+| `label_vpn` | `VPN` | name shown for tunnels such as Tailscale or WireGuard |
+| `show_vpn` | `False` | `True` adds a line per VPN tunnel, after the others |
 
 Quotes, braces and semicolons are removed from these texts, because they would
 break the console message.
@@ -105,7 +119,10 @@ afterwards.
    under a USB bus is USB, any other physical interface is the cable. Loopback,
    VPNs such as Tailscale, bridges and containers have no physical device and
    are not listed.
-3. It sends the lines back to the console with `RESPOND`, in one script, so
+3. It also runs `ip -j route show default` and lists the interfaces with a
+   default route, lowest metric first. If that command fails, only the
+   `Internet:` line is left out. VPN tunnels are never part of that line.
+4. It sends the lines back to the console with `RESPOND`, in one script, so
    they arrive together and in order.
 
 IPv6 and link-local (`169.254.x.x`) addresses are not shown: the second kind

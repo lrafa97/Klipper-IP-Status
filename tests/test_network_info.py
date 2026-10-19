@@ -17,8 +17,18 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 import network_info  # noqa: E402
 
-LABELS = {"wifi": "Wi-Fi", "wired": "Cable", "usb": "USB"}
-TEXTS = {"no_link": "not connected", "connecting": "getting an address"}
+LABELS = {"wifi": "Wi-Fi", "wired": "Cable", "usb": "USB", "vpn": "VPN"}
+TEXTS = {"no_link": "not connected", "connecting": "getting an address",
+         "internet": "Internet", "no_route": "no route", "then": "then",
+         "or": "or"}
+
+# Shape of `ip -j route show default` with a hotspot (eth1) and Wi-Fi (wlan0)
+ROUTE_OUTPUT = json.dumps([
+    {"dst": "default", "gateway": "192.168.0.1", "dev": "eth1",
+     "metric": 100, "flags": []},
+    {"dst": "default", "gateway": "192.168.0.1", "dev": "wlan0",
+     "metric": 600, "flags": []},
+])
 
 # Shape of `ip -j address` on the M-BIND (trimmed to the fields we read)
 IP_OUTPUT = json.dumps([
@@ -100,6 +110,9 @@ class FakeConfig:
     def get(self, key, default=None):
         return self.opts.get(key, default)
 
+    def getboolean(self, key, default=None):
+        return self.opts.get(key, default)
+
 
 class FakeKlippyApis:
     def __init__(self, fail=False):
@@ -138,7 +151,10 @@ def run(coro):
 def make_component(**opts):
     apis = FakeKlippyApis()
     server = FakeServer({"klippy_apis": apis})
-    return network_info.NetworkInfo(FakeConfig(server, **opts)), server, apis
+    comp = network_info.NetworkInfo(FakeConfig(server, **opts))
+    # Routes unknown by default; tests that need them patch _read_routes again
+    comp._read_routes = mock.AsyncMock(return_value=None)
+    return comp, server, apis
 
 
 class ClassifyTests(unittest.TestCase):
@@ -163,6 +179,100 @@ class ClassifyTests(unittest.TestCase):
                    "platform/axi/xhci/usb3/3-1/3-1:1.0")
         self.assertEqual(network_info.classify("enx344b50000000", self.net),
                          "usb")
+
+
+class ParseRoutesTests(unittest.TestCase):
+    def test_lowest_metric_per_interface(self):
+        self.assertEqual(network_info.parse_default_routes(ROUTE_OUTPUT),
+                         {"eth1": 100, "wlan0": 600})
+
+    def test_interface_keeps_its_lowest_metric(self):
+        raw = json.dumps([{"dst": "default", "dev": "eth0", "metric": 700},
+                          {"dst": "default", "dev": "eth0", "metric": 100}])
+        self.assertEqual(network_info.parse_default_routes(raw), {"eth0": 100})
+
+    def test_linkdown_route_is_ignored(self):
+        raw = json.dumps([{"dst": "default", "dev": "eth0", "metric": 100,
+                           "flags": ["linkdown"]}])
+        self.assertEqual(network_info.parse_default_routes(raw), {})
+
+    def test_missing_metric_is_zero(self):
+        raw = json.dumps([{"dst": "default", "dev": "eth0"}])
+        self.assertEqual(network_info.parse_default_routes(raw), {"eth0": 0})
+
+    def test_empty_means_no_default_route(self):
+        self.assertEqual(network_info.parse_default_routes("[]"), {})
+
+    def test_garbage_raises(self):
+        with self.assertRaises(network_info.NetworkInfoError):
+            network_info.parse_default_routes("not json")
+
+
+class VpnTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.net = build_sysfs(pathlib.Path(self.tmp.name))
+
+    def lines(self, show_vpn):
+        ifaces = network_info.parse_addresses(IP_OUTPUT)
+        return network_info.build_lines(ifaces, LABELS, TEXTS, self.net,
+                                        show_vpn=show_vpn)
+
+    def test_is_vpn_only_for_tunnels(self):
+        v = lambda n: network_info.is_vpn(n, self.net)  # noqa: E731
+        self.assertTrue(v("tailscale0"))
+        for name in ("lo", "docker0", "wlan0", "eth0", "eth1", "nope"):
+            self.assertFalse(v(name), name)
+
+    def test_hidden_by_default(self):
+        self.assertFalse(any("VPN" in x for x in self.lines(False)))
+
+    def test_listed_last_when_enabled(self):
+        out = self.lines(True)
+        self.assertEqual(out[-1], "VPN (tailscale0): 100.64.0.9")
+        self.assertEqual(len(out), 4)
+
+    def test_ip_lines_are_unchanged_by_the_option(self):
+        self.assertEqual(self.lines(True)[:3], self.lines(False))
+
+    def test_vpn_never_in_internet_line(self):
+        line = network_info.build_internet_line(
+            {"tailscale0": 0, "eth1": 100}, LABELS, TEXTS, self.net)
+        self.assertEqual(line, "Internet: USB (eth1)")
+
+    def test_option_is_read_from_config(self):
+        self.assertFalse(make_component()[0].show_vpn)
+        self.assertTrue(make_component(show_vpn=True)[0].show_vpn)
+
+
+class InternetLineTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.net = build_sysfs(pathlib.Path(self.tmp.name))
+
+    def line(self, routes):
+        return network_info.build_internet_line(routes, LABELS, TEXTS, self.net)
+
+    def test_lowest_metric_first(self):
+        self.assertEqual(self.line({"wlan0": 600, "eth1": 100}),
+                         "Internet: USB (eth1), then Wi-Fi (wlan0)")
+
+    def test_same_metric_is_or(self):
+        self.assertEqual(self.line({"wlan0": 100, "eth1": 100}),
+                         "Internet: USB (eth1) or Wi-Fi (wlan0)")
+
+    def test_three_groups(self):
+        self.assertEqual(
+            self.line({"wlan0": 600, "eth0": 100, "eth1": 300}),
+            "Internet: Cable (eth0), then USB (eth1), then Wi-Fi (wlan0)")
+
+    def test_no_route(self):
+        self.assertEqual(self.line({}), "Internet: no route")
+
+    def test_only_unknown_interfaces_is_no_route(self):
+        self.assertEqual(self.line({"ppp9": 10}), "Internet: no route")
 
 
 class ParseTests(unittest.TestCase):
@@ -242,6 +352,37 @@ class ComponentTests(unittest.TestCase):
             'RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"',
         ])
 
+    def test_internet_line_is_appended(self):
+        comp, _, apis = make_component()
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        with mock.patch.object(comp, "_read_interfaces",
+                               mock.AsyncMock(return_value=ifaces)), \
+             mock.patch.object(comp, "_read_routes",
+                               mock.AsyncMock(return_value={"wlan0": 600})), \
+             mock.patch.object(network_info, "classify", return_value="wifi"):
+            run(comp._on_show_request())
+        self.assertEqual(apis.gcodes[0].split("\n")[-1],
+                         'RESPOND MSG="Internet: Wi-Fi (wlan0)"')
+
+    def test_unknown_routes_omit_only_the_internet_line(self):
+        comp, _, apis = make_component()
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        with mock.patch.object(comp, "_read_interfaces",
+                               mock.AsyncMock(return_value=ifaces)), \
+             mock.patch.object(network_info, "classify", return_value="wifi"):
+            run(comp._on_show_request())
+        self.assertNotIn("Internet", apis.gcodes[0])
+        self.assertIn("Wi-Fi (wlan0): 192.168.0.177", apis.gcodes[0])
+
+    def test_no_internet_line_without_interface_lines(self):
+        comp, _, apis = make_component()
+        with mock.patch.object(comp, "_read_interfaces",
+                               mock.AsyncMock(return_value={})), \
+             mock.patch.object(comp, "_read_routes",
+                               mock.AsyncMock(return_value={})):
+            run(comp._on_show_request())
+        self.assertNotIn("Internet", apis.gcodes[0])
+
     def test_no_interfaces(self):
         comp, _, apis = make_component()
         with mock.patch.object(comp, "_read_interfaces",
@@ -307,6 +448,29 @@ class ReadInterfacesTests(unittest.TestCase):
                         mock.AsyncMock(side_effect=FileNotFoundError(2, "no"))):
             with self.assertRaises(network_info.NetworkInfoError):
                 run(comp._read_interfaces())
+
+
+class ReadRoutesTests(unittest.TestCase):
+    def read(self, proc=None, exc=None):
+        comp, _, _ = make_component()
+        comp._read_routes = network_info.NetworkInfo._read_routes.__get__(comp)
+        patch = (mock.AsyncMock(side_effect=exc) if exc
+                 else mock.AsyncMock(return_value=proc))
+        with mock.patch("asyncio.create_subprocess_exec", patch):
+            return run(comp._read_routes())
+
+    def test_ok(self):
+        self.assertEqual(self.read(FakeProc(out=ROUTE_OUTPUT.encode())),
+                         {"eth1": 100, "wlan0": 600})
+
+    def test_failure_means_unknown_not_an_error(self):
+        self.assertIsNone(self.read(FakeProc(err=b"boom", code=1)))
+
+    def test_garbage_means_unknown(self):
+        self.assertIsNone(self.read(FakeProc(out=b"nope")))
+
+    def test_ip_missing_means_unknown(self):
+        self.assertIsNone(self.read(exc=FileNotFoundError(2, "no")))
 
 
 if __name__ == "__main__":
