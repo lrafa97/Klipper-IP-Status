@@ -8,7 +8,7 @@ Este repositório é público, incluindo este ficheiro, os commits e o históric
 - Usar sempre exemplos genéricos: `printer`, `192.168.1.50`, `<MAC>`, "máquina de teste".
 - Antes de cada commit, rever o conteúdo a publicar. Se tiver dados destes, substituí-los antes do push.
 
-Contexto para quem trabalha neste repositório (Claude incluído). Escrito em português europeu porque é como o autor trabalha comigo; o **código, o README, as mensagens do programa e os commits são em inglês** (ver secção 7). Versão descrita: **0.5.1**.
+Contexto para quem trabalha neste repositório (Claude incluído). Escrito em português europeu porque é como o autor trabalha comigo; o **código, o README, as mensagens do programa e os commits são em inglês** (ver secção 7). Versão descrita: **0.5.2**.
 
 ## 1. Objetivo
 
@@ -27,6 +27,7 @@ Macro de consola `SHOW_IP_ADDRESS` para máquinas Klipper (Mainsail, KlipperScre
 - **Máquina de teste real:** família Raspberry Pi 3: Ethernet `eth0` (driver `smsc95xx`, ligado por USB internamente), hotspot USB `eth1` (driver `cdc_ether`), Wi-Fi `wlan0` numa pen USB (`mt7601u`), VPN (`tailscale0`).
 - **Pi 5:** a classificação nunca foi confirmada lá. Não assumir o modelo da máquina: pedir `cat /proc/device-tree/model`.
 - Relacionados (não alterar a partir daqui): `print-from-usb-klipper` (imprimir de pen USB; clone só de leitura) e o projeto `klipper-hotspot` (Pi em modo hotspot, repositório próprio, mesmo estilo).
+- **Licença:** GPL-3.0, porque o componente corre dentro do Moonraker.
 - Repositório: `https://github.com/lrafa97/Klipper-IP-Status`, branch `main`. O endereço antigo em minúsculas redireciona; o aviso "This repository moved" no `git push` é inofensivo.
 
 ## 3. Arquitetura
@@ -140,8 +141,7 @@ for i in /sys/class/net/*; do echo "$(basename $i) | $(cat $i/address 2>/dev/nul
 **Por fazer:**
 1. Wi-Fi com nome da rede e intensidade do sinal (`nmcli` e `/proc/net/wireless`). Aprovado pelo autor.
 2. Notificações automáticas quando a rede muda (evento `machine:net_state_changed` do Moonraker, com atraso para não repetir), com opção para ligar e desligar. **Por decidir:** ligadas ou desligadas por omissão.
-3. Licença do repositório público (`LICENSE`; proposta: MIT). Sem resposta.
-4. Documentar no README o perfil `hotspot-usb` (secção 6), por ser o que faz o hotspot funcionar com o cabo.
+3. Documentar no README o perfil `hotspot-usb` (secção 6), por ser o que faz o hotspot funcionar com o cabo.
 
 **Problemas conhecidos / limitações:**
 - O Update Manager do Mainsail não volta a correr o `install.sh`: a cópia da macro e o bloco do `moonraker.conf` só se refrescam com `bash install.sh`.
