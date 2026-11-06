@@ -1,6 +1,6 @@
 # CLAUDE.md — Klipper-IP-Status
 
-Contexto para quem trabalha neste repositório (Claude incluído). Escrito em português europeu porque é como o autor trabalha comigo; o **código, o README, as mensagens do programa e os commits são em inglês** (ver secção 7). Versão descrita: **0.5.0** (commit `660669c`).
+Contexto para quem trabalha neste repositório (Claude incluído). Escrito em português europeu porque é como o autor trabalha comigo; o **código, o README, as mensagens do programa e os commits são em inglês** (ver secção 7). Versão descrita: **0.5.1**.
 
 ## 1. Objetivo
 
@@ -16,8 +16,8 @@ Macro de consola `SHOW_IP_ADDRESS` para máquinas Klipper (Mainsail, KlipperScre
 - Klipper + Moonraker + Mainsail (a consola onde se vê o resultado), KlipperScreen no ecrã. Layout por omissão: `~/printer_data`, `~/moonraker`.
 - Raspberry Pi OS (Debian) com **NetworkManager**; na máquina de teste os perfis vêm do netplan (`netplan-eth0`, `netplan-wlan0-<ssid>`). Precisa de `iproute2` (`ip -j`), systemd e `[respond]` no Klipper (o `mainsail.cfg` já o tem).
 - Python do Moonraker (o componente corre dentro dele; sem dependências externas).
-- **Máquina de teste real: `JNTONE`**, família Raspberry Pi 3 (MAC `b8:27:eb`, controlador USB `3f980000.usb`): Ethernet `eth0` (driver `smsc95xx`, ligado por USB internamente), hotspot ZTE `eth1` (driver `cdc_ether`, MAC fixo `34:4b:50:00:00:00`), Wi-Fi `wlan0` numa pen USB (`mt7601u`), Tailscale (`tailscale0`).
-- **Pi 5 (M-BIND):** a classificação nunca foi confirmada lá. Não assumir o modelo da máquina: pedir `cat /proc/device-tree/model`.
+- **Máquina de teste real:** família Raspberry Pi 3: Ethernet `eth0` (driver `smsc95xx`, ligado por USB internamente), hotspot USB `eth1` (driver `cdc_ether`), Wi-Fi `wlan0` numa pen USB (`mt7601u`), VPN (`tailscale0`).
+- **Pi 5:** a classificação nunca foi confirmada lá. Não assumir o modelo da máquina: pedir `cat /proc/device-tree/model`.
 - Relacionados (não alterar a partir daqui): `print-from-usb-klipper` (imprimir de pen USB; clone só de leitura) e o projeto `klipper-hotspot` (Pi em modo hotspot, repositório próprio, mesmo estilo).
 - Repositório: `https://github.com/lrafa97/Klipper-IP-Status`, branch `main`. O endereço antigo em minúsculas redireciona; o aviso "This repository moved" no `git push` é inofensivo.
 
@@ -31,7 +31,7 @@ Macro de consola `SHOW_IP_ADDRESS` para máquinas Klipper (Mainsail, KlipperScre
 | `install.sh` / `uninstall.sh` | Instalação e remoção idempotentes (secção 4 e 5). |
 | `VERSION` | Versão; o componente regista-a no log do Moonraker ao arrancar. |
 | `tests/test_network_info.py` | 55 testes do componente, com Moonraker e `/sys` falsos. |
-| `tests/test_install.sh` | 67 verificações do instalador numa máquina falsa em pasta temporária. |
+| `tests/test_install.sh` | 65 verificações do instalador numa máquina falsa em pasta temporária. |
 | `README.md` | Documentação de utilizador (inglês). |
 
 Fluxo: macro → `action_call_remote_method` → componente → `ip` + `/sys/class/net` → `RESPOND` por linha.
@@ -85,11 +85,11 @@ for i in /sys/class/net/*; do echo "$(basename $i) | $(cat $i/address 2>/dev/nul
 - **"USB (eth0)" no Pi 3.** A ficha de cabo do Pi 3 está ligada ao barramento USB interno; classificar pelo caminho marcava-a como USB. Resolvido com o driver (v0.4.0). Foi preciso o output do comando de diagnóstico: **não adivinhar o hardware, pedir o output primeiro.**
 - **Hotspot em "getting an address" com o cabo ligado.** O perfil `netplan-eth0` do NetworkManager serve *qualquer* placa de cabo: no arranque ficou no hotspot (`eth1`) e deixou o `eth0` sem perfil (e, com o cabo ligado, o hotspot ficava sem perfil). Solução na máquina (fora do repositório): perfil próprio por MAC com prioridade, em vez de depender da ordem de chegada:
   ```
-  sudo nmcli connection add type ethernet con-name hotspot-usb 802-3-ethernet.mac-address 34:4b:50:00:00:00 ipv4.method auto ipv6.method ignore connection.autoconnect yes connection.autoconnect-priority 10
+  sudo nmcli connection add type ethernet con-name hotspot-usb 802-3-ethernet.mac-address <MAC-do-hotspot> ipv4.method auto ipv6.method ignore connection.autoconnect yes connection.autoconnect-priority 10
   ```
   Desfazer: `sudo nmcli connection delete hotspot-usb`. Ver o resultado com `nmcli -f NAME,DEVICE,STATE connection show | cat` (o `| cat` evita o paginador; sair dele com `q`). Perfil por MAC serve só aquele hotspot: outro modem precisa de outro perfil.
 - **Perfil `hotspot-usb` duplicado:** o `nmcli connection add` foi dado em duas mensagens e correu duas vezes; o `modify` por nome falhou com aviso de nome repetido. Dar **um só** comando de criação e verificar com `nmcli ... connection show`; apagar/alterar por UUID quando há duplicados.
-- **Hipóteses erradas já descartadas:** `usb-gcode`/`usb_modeswitch` não afetavam o hotspot (o ZTE `19d2:1225` passa a `19d2:1405`/`cdc_ether` e `eth1` aparece ~5 s depois). Dizer "o cabo não impede o hotspot" foi precipitado: na prática impediu, por causa dos perfis.
+- **Hipóteses erradas já descartadas:** `usb-gcode`/`usb_modeswitch` não afetavam o hotspot (o modem USB muda de modo para `cdc_ether` e `eth1` aparece ~5 s depois). Dizer "o cabo não impede o hotspot" foi precipitado: na prática impediu, por causa dos perfis.
 - **Teste que dependia do hostname real da máquina** (`test_show_sends_one_script_with_title_and_lines`): passou a usar `show_hostname=False`. Testes não podem depender da máquina onde correm.
 - **Cabeçalho da macro com o texto `network_info.cfg`** enganava o `grep` do instalador.
 - **Confirmar que os testes falham:** quando se acrescenta um teste, estragar o código de propósito (mutação) e ver o teste falhar. Foi assim que se apanharam testes inúteis.
@@ -106,7 +106,7 @@ for i in /sys/class/net/*; do echo "$(basename $i) | $(cat $i/address 2>/dev/nul
   - Explicar ficheiro a ficheiro o que mudou. Terminar a entrega só com os comandos a correr e os serviços a reiniciar, prontos a copiar.
   - Qualidade de engenheiro sénior: verificar antes de mexer, falhar sem deixar rasto, nada de extras sem avisar.
   - Em configuração, hardware ou segurança: dizer o que foi assumido e o que confirmar na documentação oficial.
-  - Quando precisa de dados da máquina, pedir **um só comando**, curto, e dizer exatamente o que colar. O autor perde a paciência com pedidos compridos ou repetidos.
+  - Quando precisa de dados da máquina, pedir **um só comando**, curto, e dizer exatamente o que colar.
   - Nomes de macros Klipper sem dígitos no meio. Valores editáveis ficam no `.cfg`/`moonraker.conf`, não escondidos no código.
   - Não alterar projetos vizinhos (`print-from-usb-klipper`, `klipper-hotspot`) a partir daqui.
 
@@ -118,16 +118,16 @@ for i in /sys/class/net/*; do echo "$(basename $i) | $(cat $i/address 2>/dev/nul
 - 0.3.1 instalador preserva opções do utilizador e escreve `show_vpn: False`.
 - 0.4.0 USB só para drivers de tethering; cabo de ficha USB interna = Cabo.
 - 0.5.0 linha `Hostname:` com `.local` quando o avahi corre (`show_hostname`).
-- 55 testes do componente e 67 verificações do instalador a passar.
+- 55 testes do componente e 65 verificações do instalador a passar.
 
-**Confirmado em máquina real (`JNTONE`, Pi 3):**
-- Instalação e atualização funcionam; a v0.5.0 mostra `Hostname: JNTONE (JNTONE.local)`, `Cable (eth0)`, `USB (eth1)`, `Wi-Fi (wlan0)`, `VPN (tailscale0)` e `Internet: Cable (eth0), then USB (eth1), then Wi-Fi (wlan0)`.
+**Confirmado em máquina real (Pi 3):**
+- Instalação e atualização funcionam; a v0.5.0 mostra `Hostname: printer (printer.local)`, `Cable (eth0)`, `USB (eth1)`, `Wi-Fi (wlan0)`, `VPN (tailscale0)` e `Internet: Cable (eth0), then USB (eth1), then Wi-Fi (wlan0)`.
 - Cabo = Cable e hotspot = USB, com cabo e hotspot ligados ao mesmo tempo.
 - O perfil `hotspot-usb` dá IP ao hotspot com o cabo ligado quando ativado manualmente.
 
 **Por confirmar:**
 - Arranque com cabo e hotspot ligados depois de dar prioridade ao `hotspot-usb` e de apagar o duplicado (o resultado do último reinício não foi comunicado).
-- `ip -j route show default` real; classificação no Pi 5 (M-BIND); `uninstall.sh` numa máquina real.
+- `ip -j route show default` real; classificação no Pi 5; `uninstall.sh` numa máquina real.
 
 **Por fazer:**
 1. Wi-Fi com nome da rede e intensidade do sinal (`nmcli` e `/proc/net/wireless`). Aprovado pelo autor.

@@ -178,7 +178,7 @@ def parse_default_routes(raw: str) -> Dict[str, int]:
 
 
 def build_hostname_line(label: str, hostname: str, mdns: bool) -> str:
-    """For example "Hostname: JNTONE (JNTONE.local)".
+    """For example "Hostname: printer (printer.local)".
 
     The .local name is only shown when mDNS (avahi) is running, because
     otherwise the name would not work from another computer.

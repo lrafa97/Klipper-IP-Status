@@ -9,10 +9,10 @@ Type `SHOW_IP_ADDRESS` in the console:
 
 ```
 IP addresses of this machine:
-Hostname: JNTONE (JNTONE.local)
-Wi-Fi (wlan0): 192.168.0.177
+Hostname: printer (printer.local)
+Wi-Fi (wlan0): 192.168.1.50
 Cable (eth0): not connected
-USB (eth1): 192.168.0.178
+USB (eth1): 192.168.1.51
 Internet: USB (eth1), then Wi-Fi (wlan0)
 ```
 

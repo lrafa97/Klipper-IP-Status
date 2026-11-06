@@ -30,7 +30,7 @@ ROUTE_OUTPUT = json.dumps([
      "metric": 600, "flags": []},
 ])
 
-# Shape of `ip -j address` on the M-BIND (trimmed to the fields we read)
+# Shape of `ip -j address` on a Raspberry Pi (trimmed to the fields we read)
 IP_OUTPUT = json.dumps([
     {"ifname": "lo", "operstate": "UNKNOWN", "flags": ["LOOPBACK", "UP"],
      "addr_info": [{"family": "inet", "local": "127.0.0.1", "scope": "host"}]},
@@ -39,14 +39,14 @@ IP_OUTPUT = json.dumps([
     {"ifname": "wlan0", "operstate": "UP",
      "flags": ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"],
      "addr_info": [
-         {"family": "inet", "local": "192.168.0.177", "scope": "global"},
+         {"family": "inet", "local": "192.168.1.50", "scope": "global"},
          {"family": "inet6", "local": "fe80::1", "scope": "link"}]},
     {"ifname": "tailscale0", "operstate": "UNKNOWN",
      "flags": ["POINTOPOINT", "UP", "LOWER_UP"],
      "addr_info": [{"family": "inet", "local": "100.64.0.9", "scope": "global"}]},
     {"ifname": "eth1", "operstate": "UNKNOWN",
      "flags": ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"],
-     "addr_info": [{"family": "inet", "local": "192.168.0.178",
+     "addr_info": [{"family": "inet", "local": "192.168.1.51",
                     "scope": "global"}]},
 ])
 
@@ -274,13 +274,13 @@ class VpnTests(unittest.TestCase):
 class HostnameTests(unittest.TestCase):
     def test_with_mdns(self):
         self.assertEqual(
-            network_info.build_hostname_line("Hostname", "JNTONE", True),
-            "Hostname: JNTONE (JNTONE.local)")
+            network_info.build_hostname_line("Hostname", "printer", True),
+            "Hostname: printer (printer.local)")
 
     def test_without_mdns_no_local_name(self):
         self.assertEqual(
-            network_info.build_hostname_line("Hostname", "JNTONE", False),
-            "Hostname: JNTONE")
+            network_info.build_hostname_line("Hostname", "printer", False),
+            "Hostname: printer")
 
     def test_domain_part_is_dropped(self):
         self.assertEqual(
@@ -289,41 +289,41 @@ class HostnameTests(unittest.TestCase):
 
     def run_show(self, avahi_exists, **opts):
         comp, _, apis = make_component(**opts)
-        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.1.50"]}}
         fake_pid = mock.Mock()
         fake_pid.exists.return_value = avahi_exists
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value=ifaces)), \
              mock.patch.object(network_info, "classify", return_value="wifi"), \
              mock.patch.object(network_info, "AVAHI_PID", fake_pid), \
-             mock.patch("socket.gethostname", return_value="JNTONE"):
+             mock.patch("socket.gethostname", return_value="printer"):
             run(comp._on_show_request())
         return apis.gcodes[0].split("\n")
 
     def test_line_comes_after_title_and_ips_stay(self):
         out = self.run_show(True)
-        self.assertEqual(out[1], 'RESPOND MSG="Hostname: JNTONE (JNTONE.local)"')
-        self.assertIn('RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"', out)
+        self.assertEqual(out[1], 'RESPOND MSG="Hostname: printer (printer.local)"')
+        self.assertIn('RESPOND MSG="Wi-Fi (wlan0): 192.168.1.50"', out)
 
     def test_without_avahi(self):
         self.assertEqual(self.run_show(False)[1],
-                         'RESPOND MSG="Hostname: JNTONE"')
+                         'RESPOND MSG="Hostname: printer"')
 
     def test_can_be_turned_off_and_ips_stay(self):
         out = self.run_show(True, show_hostname=False)
         self.assertFalse(any("Hostname" in x for x in out))
-        self.assertIn('RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"', out)
+        self.assertIn('RESPOND MSG="Wi-Fi (wlan0): 192.168.1.50"', out)
 
     def test_hostname_error_only_drops_the_line(self):
         comp, _, apis = make_component()
-        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.1.50"]}}
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value=ifaces)), \
              mock.patch.object(network_info, "classify", return_value="wifi"), \
              mock.patch("socket.gethostname", side_effect=OSError("x")):
             run(comp._on_show_request())
         self.assertNotIn("Hostname", apis.gcodes[0])
-        self.assertIn("192.168.0.177", apis.gcodes[0])
+        self.assertIn("192.168.1.50", apis.gcodes[0])
 
 
 class InternetLineTests(unittest.TestCase):
@@ -358,8 +358,8 @@ class InternetLineTests(unittest.TestCase):
 class ParseTests(unittest.TestCase):
     def test_addresses_and_state(self):
         r = network_info.parse_addresses(IP_OUTPUT)
-        self.assertEqual(r["wlan0"], {"up": True, "ips": ["192.168.0.177"]})
-        self.assertEqual(r["eth1"], {"up": True, "ips": ["192.168.0.178"]})
+        self.assertEqual(r["wlan0"], {"up": True, "ips": ["192.168.1.50"]})
+        self.assertEqual(r["eth1"], {"up": True, "ips": ["192.168.1.51"]})
         self.assertEqual(r["eth0"], {"up": False, "ips": []})
 
     def test_link_local_ipv4_is_not_an_address(self):
@@ -394,9 +394,9 @@ class BuildLinesTests(unittest.TestCase):
 
     def test_real_machine_example(self):
         self.assertEqual(self.lines(), [
-            "Wi-Fi (wlan0): 192.168.0.177",
+            "Wi-Fi (wlan0): 192.168.1.50",
             "Cable (eth0): not connected",
-            "USB (eth1): 192.168.0.178",
+            "USB (eth1): 192.168.1.51",
         ])
 
     def test_usb_not_listed_when_not_plugged(self):
@@ -421,7 +421,7 @@ class ComponentTests(unittest.TestCase):
 
     def test_show_sends_one_script_with_title_and_lines(self):
         comp, _, apis = make_component(show_hostname=False)
-        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.1.50"]}}
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value=ifaces)), \
              mock.patch.object(network_info, "classify", return_value="wifi"):
@@ -429,12 +429,12 @@ class ComponentTests(unittest.TestCase):
         self.assertEqual(len(apis.gcodes), 1)
         self.assertEqual(apis.gcodes[0].split("\n"), [
             'RESPOND MSG="IP addresses of this machine:"',
-            'RESPOND MSG="Wi-Fi (wlan0): 192.168.0.177"',
+            'RESPOND MSG="Wi-Fi (wlan0): 192.168.1.50"',
         ])
 
     def test_internet_line_is_appended(self):
         comp, _, apis = make_component()
-        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.1.50"]}}
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value=ifaces)), \
              mock.patch.object(comp, "_read_routes",
@@ -446,13 +446,13 @@ class ComponentTests(unittest.TestCase):
 
     def test_unknown_routes_omit_only_the_internet_line(self):
         comp, _, apis = make_component()
-        ifaces = {"wlan0": {"up": True, "ips": ["192.168.0.177"]}}
+        ifaces = {"wlan0": {"up": True, "ips": ["192.168.1.50"]}}
         with mock.patch.object(comp, "_read_interfaces",
                                mock.AsyncMock(return_value=ifaces)), \
              mock.patch.object(network_info, "classify", return_value="wifi"):
             run(comp._on_show_request())
         self.assertNotIn("Internet", apis.gcodes[0])
-        self.assertIn("Wi-Fi (wlan0): 192.168.0.177", apis.gcodes[0])
+        self.assertIn("Wi-Fi (wlan0): 192.168.1.50", apis.gcodes[0])
 
     def test_no_internet_line_without_interface_lines(self):
         comp, _, apis = make_component()
