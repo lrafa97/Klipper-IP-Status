@@ -1,5 +1,13 @@
 # CLAUDE.md — Klipper-IP-Status
 
+## Repositório público: regra obrigatória
+
+Este repositório é público, incluindo este ficheiro, os commits e o histórico. Vale para qualquer sessão do Claude, na web ou no PC.
+
+- Nunca publicar nomes de pessoas, nomes reais de máquinas, IPs reais, endereços MAC, números de série, nomes de redes Wi-Fi, caminhos de pastas pessoais, emails, tokens, palavras-passe, nomes de clientes, projetos de trabalho ou notas sobre o utilizador.
+- Usar sempre exemplos genéricos: `printer`, `192.168.1.50`, `<MAC>`, "máquina de teste".
+- Antes de cada commit, rever o conteúdo a publicar. Se tiver dados destes, substituí-los antes do push.
+
 Contexto para quem trabalha neste repositório (Claude incluído). Escrito em português europeu porque é como o autor trabalha comigo; o **código, o README, as mensagens do programa e os commits são em inglês** (ver secção 7). Versão descrita: **0.5.1**.
 
 ## 1. Objetivo
